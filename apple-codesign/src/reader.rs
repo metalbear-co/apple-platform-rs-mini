@@ -9,7 +9,6 @@ use {
         certificate::AppleCertificate,
         code_directory::CodeDirectoryBlob,
         cryptography::DigestType,
-        dmg::{path_is_dmg, DmgReader},
         embedded_signature::{BlobEntry, EmbeddedSignature},
         embedded_signature_builder::{CD_DIGESTS_OID, CD_DIGESTS_PLIST_OID},
         error::{AppleCodesignError, Result},
@@ -21,7 +20,7 @@ use {
     std::{
         fmt::Debug,
         fs::File,
-        io::{BufWriter, Cursor, Read, Seek},
+        io::{BufWriter, Cursor, Read},
         ops::Deref,
         path::{Path, PathBuf},
     },
@@ -605,7 +604,6 @@ pub enum CodeSignatureFile {
     Other,
 }
 
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SignatureEntity {
@@ -689,20 +687,6 @@ impl SignatureReader {
         }
     }
 
-    fn resolve_dmg_entity(dmg: &DmgReader) -> Result<DmgEntity, AppleCodesignError> {
-        let signature = if let Some(sig) = dmg.embedded_signature()? {
-            Some(sig.try_into()?)
-        } else {
-            None
-        };
-
-        Ok(DmgEntity {
-            code_signature_offset: dmg.koly().code_signature_offset,
-            code_signature_size: dmg.koly().code_signature_size,
-            signature,
-        })
-    }
-
     fn resolve_macho_entities_from_data(
         path: &Path,
         data: &[u8],
@@ -764,6 +748,4 @@ impl SignatureReader {
 
         Ok(entity)
     }
-
-
 }

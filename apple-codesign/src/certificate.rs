@@ -11,14 +11,13 @@ use {
         ConstOid, Oid,
     },
     bytes::Bytes,
-    pkcs8::EncodePrivateKey,
     std::{
         fmt::{Display, Formatter},
         str::FromStr,
     },
     x509_certificate::{
         certificate::KeyUsage, rfc4519::OID_COUNTRY_NAME, CapturedX509Certificate,
-        InMemorySigningKeyPair, KeyAlgorithm, X509CertificateBuilder,
+        X509CertificateBuilder,
     },
 };
 
@@ -1336,56 +1335,6 @@ impl AppleCertificateBuilder for X509CertificateBuilder {
                 }
             })
             .collect::<Vec<_>>()
-    }
-}
-
-/// Create a new self-signed X.509 certificate suitable for signing code.
-///
-/// The created certificate contains all the extensions needed to convey
-/// that it is used for code signing and should resemble certificates.
-///
-/// However, because the certificate isn't signed by Apple or another
-/// trusted certificate authority, binaries signed with the certificate
-/// may not pass Apple's verification requirements and the OS may refuse
-/// to proceed. Needless to say, only use certificates generated with this
-/// function for testing purposes only.
-pub fn create_self_signed_code_signing_certificate(
-    algorithm: KeyAlgorithm,
-    profile: CertificateProfile,
-    team_id: &str,
-    person_name: &str,
-    country: &str,
-    validity_duration: chrono::Duration,
-) -> Result<(CapturedX509Certificate, InMemorySigningKeyPair), AppleCodesignError> {
-    let mut builder = X509CertificateBuilder::default();
-
-    builder.apple_certificate_profile(profile)?;
-    builder.apple_subject(team_id, person_name, country)?;
-    builder.validity_duration(validity_duration);
-
-    // x509-certificate crate doesn't support RSA key generation. So do
-    // that ourselves.
-    if matches!(algorithm, KeyAlgorithm::Rsa) {
-        let private_key = rsa::RsaPrivateKey::new(&mut rand::thread_rng(), 2048).map_err(|e| {
-            AppleCodesignError::CertificateBuildError(format!("error generating RSA key: {}", e))
-        })?;
-        let key_pair = InMemorySigningKeyPair::from_pkcs8_der(
-            private_key
-                .to_pkcs8_der()
-                .map_err(|e| {
-                    AppleCodesignError::CertificateGeneric(format!(
-                        "error converting RSA key to DER: {}",
-                        e
-                    ))
-                })?
-                .as_bytes(),
-        )?;
-
-        let cert = builder.create_with_key_pair(&key_pair)?;
-
-        Ok((cert, key_pair))
-    } else {
-        Ok(builder.create_with_random_keypair(algorithm)?)
     }
 }
 

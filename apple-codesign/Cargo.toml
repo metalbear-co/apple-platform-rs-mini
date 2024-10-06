@@ -11,9 +11,6 @@ homepage = "https://github.com/indygreg/apple-platform-rs"
 repository = "https://github.com/indygreg/apple-platform-rs.git"
 readme = "README.md"
 
-[[bin]]
-name = "rcodesign"
-path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.79"

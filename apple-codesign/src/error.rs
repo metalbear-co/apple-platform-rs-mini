@@ -342,10 +342,6 @@ pub enum AppleCodesignError {
     #[error("failed to authenticate with smartcard device")]
     SmartcardFailedAuthentication,
 
-    #[cfg(feature = "yubikey")]
-    #[error("YubiKey error: {0}")]
-    YubiKey(#[from] yubikey::Error),
-
     #[error("poisoned lock")]
     PoisonedLock,
 
@@ -355,13 +351,6 @@ pub enum AppleCodesignError {
     #[error("zip structs error: {0}")]
     ZipStructs(#[from] zip_structs::zip_error::ZipReadError),
 
-    #[cfg(feature = "notarize")]
-    #[error("bytestream creation error: {0}")]
-    AwsByteStream(#[from] aws_smithy_types::byte_stream::error::Error),
-
-    #[cfg(feature = "notarize")]
-    #[error("s3 upload error: {0}")]
-    AwsS3Error(Box<aws_sdk_s3::Error>),
 
     #[error("bad time value")]
     BadTime,

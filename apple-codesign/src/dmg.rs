@@ -45,18 +45,14 @@ and invalidate prior signatures.
 
 use {
     crate::{
-        code_directory::{CodeDirectoryBlob, CodeSignatureFlags},
         cryptography::{Digest, DigestType},
-        embedded_signature::{BlobData, CodeSigningSlot, EmbeddedSignature, RequirementSetBlob},
-        embedded_signature_builder::EmbeddedSignatureBuilder,
-        AppleCodesignError
+        embedded_signature::EmbeddedSignature,
+        AppleCodesignError,
     },
-    log::warn,
     scroll::{Pread, Pwrite, SizeWith},
     std::{
-        borrow::Cow,
         fs::File,
-        io::{Read, Seek, SeekFrom, Write},
+        io::{Read, Seek, SeekFrom},
         path::Path,
     },
 };

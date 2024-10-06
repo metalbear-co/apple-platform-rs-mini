@@ -16,18 +16,9 @@
 //! We gave up and decided to just coerce the [plist::Value] instances instead.
 
 use {
-    crate::{
-        cryptography::{DigestType, MultiDigest},
-        error::AppleCodesignError,
-    },
-    log::{debug, error, info, warn},
+    crate::{cryptography::DigestType, error::AppleCodesignError},
     plist::{Dictionary, Value},
-    std::{
-        cmp::Ordering,
-        collections::{BTreeMap, BTreeSet},
-        io::Write,
-        path::Path,
-    },
+    std::{cmp::Ordering, collections::BTreeMap, path::Path},
 };
 
 #[derive(Clone, PartialEq)]
@@ -704,7 +695,6 @@ impl CodeResources {
             rules2,
         })
     }
-
 }
 
 impl From<&CodeResources> for Value {
@@ -771,19 +761,6 @@ pub fn normalized_resources_path(path: impl AsRef<Path>) -> String {
     path
 }
 
-/// Find the first rule matching a given path.
-///
-/// Internally, rules are sorted by decreasing priority, with exclusion
-/// rules having highest priority. So the first pattern that matches is
-/// rule we use.
-///
-/// Pattern matches are always against the normalized filename. (e.g.
-/// `Contents/` is stripped.)
-fn find_rule(rules: &[CodeResourcesRule], path: impl AsRef<Path>) -> Option<CodeResourcesRule> {
-    let path = normalized_resources_path(path);
-    rules.iter().find(|rule| rule.re.is_match(&path)).cloned()
-}
-
 /// Interface for constructing a `CodeResources` instance.
 ///
 /// This type is used during bundle signing to construct a `CodeResources` instance.
@@ -807,7 +784,6 @@ impl Default for CodeResourcesBuilder {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

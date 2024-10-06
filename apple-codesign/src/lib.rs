@@ -134,10 +134,6 @@ pub use macho::*;
 pub mod macho_builder;
 mod macho_universal;
 pub use macho_universal::UniversalBinaryBuilder;
-#[cfg(feature = "notarize")]
-pub mod notarization;
-#[cfg(feature = "notarize")]
-pub use notarization::*;
 pub mod plist_der;
 mod policy;
 pub use policy::*;
@@ -149,5 +145,3 @@ mod verify;
 pub use verify::*;
 #[cfg(target_os = "windows")]
 pub mod windows;
-#[cfg(feature = "yubikey")]
-pub mod yubikey;

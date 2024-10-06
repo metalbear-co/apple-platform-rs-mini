@@ -148,18 +148,6 @@ pub enum CodeDirectoryVersion {
     SupportsLinkage = 0x20600,
 }
 
-#[repr(C)]
-pub struct Scatter {
-    /// Number of pages. 0 for sentinel only.
-    count: u32,
-    /// First page number.
-    base: u32,
-    /// Offset in target.
-    target_offset: u64,
-    /// Reserved.
-    spare: u64,
-}
-
 fn get_hashes(data: &[u8], offset: usize, count: usize, hash_size: usize) -> Vec<Digest<'_>> {
     data[offset..offset + (count * hash_size)]
         .chunks(hash_size)

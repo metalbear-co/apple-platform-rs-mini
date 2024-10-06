@@ -9,7 +9,6 @@ use {
     bytes::Bytes,
     clap::ValueEnum,
     der::{asn1, Decode, Document, Encode, SecretDocument},
-    digest::DynDigest,
     elliptic_curve::{
         sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint},
         AffinePoint, Curve, CurveArithmetic, FieldBytesSize, SecretKey as ECSecretKey,
@@ -21,7 +20,6 @@ use {
     pkcs1::RsaPrivateKey,
     pkcs8::{EncodePrivateKey, ObjectIdentifier, PrivateKeyInfo},
     ring::signature::{Ed25519KeyPair, KeyPair},
-    rsa::{pkcs1::DecodeRsaPrivateKey, BigUint, Oaep, RsaPrivateKey as RsaConstructedKey},
     signature::Signer,
     spki::AlgorithmIdentifier,
     std::{
@@ -30,7 +28,6 @@ use {
         fmt::{Display, Formatter},
         path::Path,
     },
-    subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption},
     x509_certificate::{
         CapturedX509Certificate, DigestAlgorithm, EcdsaCurve, InMemorySigningKeyPair, KeyAlgorithm,
         KeyInfoSigner, Sign, Signature, SignatureAlgorithm, X509CertificateError,
@@ -71,21 +68,6 @@ impl InMemoryRsaKey {
     }
 }
 
-impl From<&InMemoryRsaKey> for RsaConstructedKey {
-    fn from(key: &InMemoryRsaKey) -> Self {
-        let key = key.rsa_private_key();
-
-        let n = BigUint::from_bytes_be(key.modulus.as_bytes());
-        let e = BigUint::from_bytes_be(key.public_exponent.as_bytes());
-        let d = BigUint::from_bytes_be(key.private_exponent.as_bytes());
-        let prime1 = BigUint::from_bytes_be(key.prime1.as_bytes());
-        let prime2 = BigUint::from_bytes_be(key.prime2.as_bytes());
-        let primes = vec![prime1, prime2];
-
-        Self::from_components(n, e, d, primes).expect("inputs valid")
-    }
-}
-
 impl TryFrom<InMemoryRsaKey> for InMemorySigningKeyPair {
     type Error = AppleCodesignError;
 
@@ -113,8 +95,6 @@ impl EncodePrivateKey for InMemoryRsaKey {
         Ok(Document::from_der(&raw)?.into_secret())
     }
 }
-
-
 
 #[derive(Clone, Debug)]
 pub struct InMemoryEcdsaKey<C>
@@ -188,7 +168,6 @@ where
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct InMemoryEd25519Key {
     private_key: Zeroizing<Vec<u8>>,
@@ -235,7 +214,6 @@ impl EncodePrivateKey for InMemoryEd25519Key {
         pki.try_into()
     }
 }
-
 
 /// Holds a private key in memory.
 #[derive(Clone, Debug)]
@@ -729,120 +707,6 @@ pub fn parse_pfx_data(
         (_, None) => Err(AppleCodesignError::PfxParseError(
             "failed to find signing key in PFX data".to_string(),
         )),
-    }
-}
-
-/// RSA OAEP post decrypt depadding.
-///
-/// This implements the procedure described by RFC 3447 Section 7.1.2
-/// starting at Step 3 (after the ciphertext has been fed into the low-level
-/// RSA decryption.
-///
-/// This implementation has NOT been audited and shouldn't be used. It only
-/// exists here because we need it to support RSA decryption using YubiKeys.
-/// https://github.com/RustCrypto/RSA/issues/159 is fixed to hopefully get this
-/// exposed as an API on the rsa crate.
-#[allow(unused)]
-pub(crate) fn rsa_oaep_post_decrypt_decode(
-    modulus_length_bytes: usize,
-    mut em: Vec<u8>,
-    digest: &mut dyn digest::DynDigest,
-    mgf_digest: &mut dyn digest::DynDigest,
-    label: Option<String>,
-) -> Result<Vec<u8>, rsa::errors::Error> {
-    let k = modulus_length_bytes;
-    let digest_len = digest.output_size();
-
-    // 3. EME_OAEP decoding.
-
-    // 3a.
-    let label = label.unwrap_or_default();
-    digest.update(label.as_bytes());
-    let label_digest = digest.finalize_reset();
-
-    // 3b.
-    let (y, remaining) = em.split_at_mut(1);
-    let (masked_seed, masked_db) = remaining.split_at_mut(digest_len);
-
-    if masked_seed.len() != digest_len || masked_db.len() != k - digest_len - 1 {
-        return Err(rsa::errors::Error::Decryption);
-    }
-
-    // 3c - 3f.
-    mgf1_xor(masked_seed, mgf_digest, masked_db);
-    mgf1_xor(masked_db, mgf_digest, masked_seed);
-
-    // 3g.
-    //
-    // We need to split into padding string (all zeroes) and message M with a
-    // 0x01 between them. The padding string should be all zeroes. And this should
-    // execute in constant time, which makes it tricky.
-
-    let digests_equivalent = masked_db[0..digest_len].ct_eq(label_digest.as_ref());
-
-    let mut looking_for_index = Choice::from(1u8);
-    let mut index = 0u32;
-    let mut padding_invalid = Choice::from(0u8);
-
-    for (i, value) in masked_db.iter().skip(digest_len).enumerate() {
-        let is_zero = value.ct_eq(&0u8);
-        let is_one = value.ct_eq(&1u8);
-
-        index.conditional_assign(&(i as u32), looking_for_index & is_one);
-        looking_for_index &= !is_one;
-        padding_invalid |= looking_for_index & !is_zero;
-    }
-
-    let y_is_zero = y[0].ct_eq(&0u8);
-
-    let valid = y_is_zero & digests_equivalent & !padding_invalid & !looking_for_index;
-
-    let res = CtOption::new((em, index + 2 + (digest_len * 2) as u32), valid);
-
-    if res.is_none().into() {
-        return Err(rsa::errors::Error::Decryption);
-    }
-
-    let (out, index) = res.unwrap();
-
-    Ok(out[index as usize..].to_vec())
-}
-
-fn inc_counter(counter: &mut [u8; 4]) {
-    for i in (0..4).rev() {
-        counter[i] = counter[i].wrapping_add(1);
-        if counter[i] != 0 {
-            // No overflow
-            return;
-        }
-    }
-}
-
-fn mgf1_xor(out: &mut [u8], digest: &mut dyn DynDigest, seed: &[u8]) {
-    let mut counter = [0u8; 4];
-    let mut i = 0;
-
-    const MAX_LEN: u64 = core::u32::MAX as u64 + 1;
-    assert!(out.len() as u64 <= MAX_LEN);
-
-    while i < out.len() {
-        let mut digest_input = vec![0u8; seed.len() + 4];
-        digest_input[0..seed.len()].copy_from_slice(seed);
-        digest_input[seed.len()..].copy_from_slice(&counter);
-
-        digest.update(digest_input.as_slice());
-        let digest_output = &*digest.finalize_reset();
-        let mut j = 0;
-        loop {
-            if j >= digest_output.len() || i >= out.len() {
-                break;
-            }
-
-            out[i] ^= digest_output[j];
-            j += 1;
-            i += 1;
-        }
-        inc_counter(&mut counter);
     }
 }
 
