@@ -5,11 +5,7 @@
 //! Common cryptography primitives.
 
 use {
-    crate::{
-        remote_signing::{session_negotiation::PublicKeyPeerDecrypt, RemoteSignError},
-        AppleCodesignError,
-    },
-    apple_xar::table_of_contents::ChecksumType as XarChecksumType,
+    crate::AppleCodesignError,
     bytes::Bytes,
     clap::ValueEnum,
     der::{asn1, Decode, Document, Encode, SecretDocument},
@@ -45,10 +41,6 @@ use {
 /// A supertrait generically describing a private key capable of signing and possibly decryption.
 pub trait PrivateKey: KeyInfoSigner {
     fn as_key_info_signer(&self) -> &dyn KeyInfoSigner;
-
-    fn to_public_key_peer_decrypt(
-        &self,
-    ) -> Result<Box<dyn PublicKeyPeerDecrypt>, AppleCodesignError>;
 
     /// Signals the end of operations on the private key.
     ///
@@ -122,20 +114,7 @@ impl EncodePrivateKey for InMemoryRsaKey {
     }
 }
 
-impl PublicKeyPeerDecrypt for InMemoryRsaKey {
-    fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, RemoteSignError> {
-        let key = RsaConstructedKey::from_pkcs1_der(self.private_key.as_bytes())
-            .map_err(|e| RemoteSignError::Crypto(format!("failed to parse RSA key: {e}")))?;
 
-        let padding = Oaep::new::<sha2::Sha256>();
-
-        let plaintext = key
-            .decrypt(padding, ciphertext)
-            .map_err(|e| RemoteSignError::Crypto(format!("RSA decryption failure: {e}")))?;
-
-        Ok(plaintext)
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct InMemoryEcdsaKey<C>
@@ -209,18 +188,6 @@ where
     }
 }
 
-impl<C> PublicKeyPeerDecrypt for InMemoryEcdsaKey<C>
-where
-    C: Curve + CurveArithmetic,
-    AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
-    FieldBytesSize<C>: ModulusSize,
-{
-    fn decrypt(&self, _ciphertext: &[u8]) -> Result<Vec<u8>, RemoteSignError> {
-        Err(RemoteSignError::Crypto(
-            "decryption using ECDSA keys is not yet implemented".into(),
-        ))
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct InMemoryEd25519Key {
@@ -269,13 +236,6 @@ impl EncodePrivateKey for InMemoryEd25519Key {
     }
 }
 
-impl PublicKeyPeerDecrypt for InMemoryEd25519Key {
-    fn decrypt(&self, _ciphertext: &[u8]) -> Result<Vec<u8>, RemoteSignError> {
-        Err(RemoteSignError::Crypto(
-            "decryption using ED25519 keys is not yet implemented".into(),
-        ))
-    }
-}
 
 /// Holds a private key in memory.
 #[derive(Clone, Debug)]
@@ -430,32 +390,6 @@ impl Sign for InMemoryPrivateKey {
 
 impl KeyInfoSigner for InMemoryPrivateKey {}
 
-impl PublicKeyPeerDecrypt for InMemoryPrivateKey {
-    fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, RemoteSignError> {
-        match self {
-            Self::Rsa(key) => key.decrypt(ciphertext),
-            Self::EcdsaP256(key) => key.decrypt(ciphertext),
-            Self::Ed25519(key) => key.decrypt(ciphertext),
-        }
-    }
-}
-
-impl PrivateKey for InMemoryPrivateKey {
-    fn as_key_info_signer(&self) -> &dyn KeyInfoSigner {
-        self
-    }
-
-    fn to_public_key_peer_decrypt(
-        &self,
-    ) -> Result<Box<dyn PublicKeyPeerDecrypt>, AppleCodesignError> {
-        Ok(Box::new(self.clone()))
-    }
-
-    fn finish(&self) -> Result<(), AppleCodesignError> {
-        Ok(())
-    }
-}
-
 impl InMemoryPrivateKey {
     /// Construct an instance by parsing PKCS#1 DER data.
     pub fn from_pkcs1_der(data: impl AsRef<[u8]>) -> Result<Self, AppleCodesignError> {
@@ -553,20 +487,6 @@ impl TryFrom<&str> for DigestType {
             "sha384" => Ok(Self::Sha384),
             "sha512" => Ok(Self::Sha512),
             _ => Err(AppleCodesignError::DigestUnknownAlgorithm),
-        }
-    }
-}
-
-impl TryFrom<XarChecksumType> for DigestType {
-    type Error = AppleCodesignError;
-
-    fn try_from(c: XarChecksumType) -> Result<Self, Self::Error> {
-        match c {
-            XarChecksumType::None => Ok(Self::None),
-            XarChecksumType::Sha1 => Ok(Self::Sha1),
-            XarChecksumType::Sha256 => Ok(Self::Sha256),
-            XarChecksumType::Sha512 => Ok(Self::Sha512),
-            XarChecksumType::Md5 => Err(AppleCodesignError::DigestUnsupportedAlgorithm),
         }
     }
 }

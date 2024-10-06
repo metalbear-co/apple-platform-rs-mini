@@ -111,11 +111,8 @@
 
 mod apple_certificates;
 pub use apple_certificates::*;
-mod bundle_signing;
-pub use bundle_signing::*;
 mod certificate;
 pub use certificate::*;
-pub mod cli;
 mod code_directory;
 pub use code_directory::*;
 pub mod code_requirement;
@@ -135,13 +132,6 @@ pub use error::*;
 mod macho;
 pub use macho::*;
 pub mod macho_builder;
-#[cfg(target_os = "macos")]
-#[allow(non_upper_case_globals)]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use macos::*;
-mod macho_signing;
-pub use macho_signing::*;
 mod macho_universal;
 pub use macho_universal::UniversalBinaryBuilder;
 #[cfg(feature = "notarize")]
@@ -153,13 +143,7 @@ mod policy;
 pub use policy::*;
 mod reader;
 pub use reader::*;
-pub mod remote_signing;
-mod signing_settings;
-pub use signing_settings::*;
-mod signing;
-pub use signing::*;
 pub mod specification;
-pub mod stapling;
 pub mod ticket_lookup;
 mod verify;
 pub use verify::*;

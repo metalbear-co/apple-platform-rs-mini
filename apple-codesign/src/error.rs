@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use {
-    crate::{macho_universal::UniversalMachOError, remote_signing::RemoteSignError},
+    crate::macho_universal::UniversalMachOError,
     cryptographic_message_syntax::CmsError,
     std::path::PathBuf,
     thiserror::Error,
@@ -87,12 +87,6 @@ pub enum AppleCodesignError {
 
     #[error("error parsing version string: {0}")]
     VersionParse(#[from] semver::Error),
-
-    #[error("XAR error: {0}")]
-    Xar(#[from] apple_xar::Error),
-
-    #[error("Apple flat package error: {0}")]
-    FlatPackage(#[from] apple_flat_package::Error),
 
     #[error("unable to locate __TEXT segment")]
     MissingText,
@@ -228,10 +222,6 @@ pub enum AppleCodesignError {
     #[error("error parsing PFX data: {0}")]
     PfxParseError(String),
 
-    #[cfg(target_os = "macos")]
-    #[error("SecurityFramework error: {0}")]
-    SecurityFramework(#[from] security_framework::base::Error),
-
     #[error("error interfacing with macOS keychain: {0}")]
     KeychainError(String),
 
@@ -328,9 +318,6 @@ pub enum AppleCodesignError {
     #[error("unable to determine app platform from bundle")]
     BundleUnknownAppPlatform,
 
-    #[error("do not support stapling {0:?} bundles")]
-    StapleUnsupportedBundleType(apple_bundles::BundlePackageType),
-
     #[error("XAR file is malformed; cannot staple")]
     StapleMalformedXar,
 
@@ -367,9 +354,6 @@ pub enum AppleCodesignError {
 
     #[error("zip structs error: {0}")]
     ZipStructs(#[from] zip_structs::zip_error::ZipReadError),
-
-    #[error("remote signing error: {0}")]
-    RemoteSign(#[from] RemoteSignError),
 
     #[cfg(feature = "notarize")]
     #[error("bytestream creation error: {0}")]
